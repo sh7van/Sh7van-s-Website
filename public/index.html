@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fil">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sh7van YTA</title>
+<style>
+:root{--bg:#0e0f14;--card:#171923;--line:#262a38;--tx:#eceef5;--mut:#8b90a3;--ac:#ff3b4e;--ac2:#ff8a3b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f5f6fa;--card:#fff;--line:#e1e4ee;--tx:#171923;--mut:#6a6f85}}
+:root[data-theme="dark"]{--bg:#0e0f14;--card:#171923;--line:#262a38;--tx:#eceef5;--mut:#8b90a3}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+.w{max-width:960px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--ac),var(--ac2));display:grid;place-items:center;color:#fff;font-weight:800}
+h1{font-size:1.5rem;margin:0;letter-spacing:-.5px}
+h1 span{color:var(--ac)}
+.sub{color:var(--mut);font-size:.85rem}
+#drop{border:2px dashed var(--line);border-radius:16px;padding:28px 16px;text-align:center;background:var(--card);cursor:pointer;transition:.15s}
+#drop.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 8%,var(--card))}
+#drop b{display:block;font-size:1.05rem}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+select,input[type=search]{background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit}
+input[type=search]{flex:1;min-width:150px}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:99px;padding:6px 14px;cursor:pointer;white-space:nowrap;font:inherit;font-size:.85rem}
+.tab.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.f{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.th{height:110px;background:var(--bg);display:grid;place-items:center;font-size:2rem;overflow:hidden}
+.th img{width:100%;height:100%;object-fit:cover}
+.in{padding:10px 12px;flex:1}
+.nm{font-weight:600;font-size:.9rem;word-break:break-word}
+.mt{color:var(--mut);font-size:.75rem}
+.ac{display:flex;border-top:1px solid var(--line)}
+.ac a,.ac button{flex:1;text-align:center;padding:9px;font:inherit;font-size:.8rem;color:var(--tx);background:none;border:0;cursor:pointer;text-decoration:none}
+.ac button{color:var(--ac);border-left:1px solid var(--line)}
+.msg{padding:14px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--mut);font-size:.9rem;margin:12px 0}
+.empty{text-align:center;color:var(--mut);padding:40px 0}
+</style>
+</head>
+<body>
+<div class="w">
+<header><div class="logo">S7</div><div><h1>Sh7van <span>YTA</span></h1><div class="sub">Resource vault para sa YouTube Automation</div></div></header>
+
+<div id="drop"><b>📁 I-drop dito ang files o pindutin para mag-upload</b><span class="sub">Kahit anong file: video, audio, ZIP, PDF, images, scripts... walang limit</span></div>
+<input id="inp" type="file" multiple hidden>
+<div id="status"></div>
+
+<div class="row">
+<select id="cat"></select>
+<input id="q" type="search" placeholder="Hanapin ang file...">
+</div>
+<div class="tabs" id="tabs"></div>
+<div class="grid" id="list"></div>
+<div class="empty" id="empty" hidden>Wala pang files dito. Mag-upload ka na! 🚀</div>
+</div>
+
+<script>
+const CATS=["Scripts","Thumbnails","Footage","Audio","Templates","Niche Research","Other"];
+const ICON={image:"🖼️",video:"🎬",pdf:"📄",text:"📝",audio:"🎵",zip:"🗜️",file:"📦"};
+let files=[],tab="All";
+const $=id=>document.getElementById(id);
+$("cat").innerHTML=CATS.map(c=>`<option>${c}</option>`).join("");
+const say=t=>{$("status").innerHTML=t?`<div class="msg"></div>`:"";if(t)$("status").firstChild.textContent=t};
+const kb=n=>n>1048576?(n/1048576).toFixed(1)+" MB":Math.max(1,Math.round(n/1024))+" KB";
+const kind=t=>t.startsWith("image")?"image":t.startsWith("video")?"video":t.startsWith("audio")?"audio":t.includes("pdf")?"pdf":t.includes("zip")?"zip":t.startsWith("text")||t.includes("json")?"text":"file";
+function tabs(){
+  $("tabs").innerHTML="";
+  ["All",...CATS].forEach(c=>{const b=document.createElement("button");b.className="tab"+(c===tab?" on":"");b.textContent=c;b.onclick=()=>{tab=c;render()};$("tabs").appendChild(b)});
+}
+function render(){
+  tabs();
+  const q=$("q").value.toLowerCase();
+  const rows=files.filter(f=>(tab==="All"||f.cat===tab)&&f.name.toLowerCase().includes(q));
+  $("empty").hidden=rows.length>0;
+  const L=$("list");L.innerHTML="";
+  rows.forEach(f=>{
+    const d=document.createElement("div");d.className="f";
+    const th=document.createElement("div");th.className="th";
+    if(kind(f.type)==="image"&&f.type!=="image/svg+xml"){const im=document.createElement("img");im.src=f.url;im.alt="";th.appendChild(im)}else th.textContent=ICON[kind(f.type)];
+    const i=document.createElement("div");i.className="in";
+    const n=document.createElement("div");n.className="nm";n.textContent=f.name;
+    const m=document.createElement("div");m.className="mt";m.textContent=f.cat+" · "+kb(f.size);
+    i.append(n,m);
+    const a=document.createElement("div");a.className="ac";
+    const o=document.createElement("a");o.href=f.url;o.target="_blank";o.rel="noopener";o.textContent="Buksan";
+    const x=document.createElement("button");x.textContent="Delete";x.onclick=()=>del(f);
+    a.append(o,x);d.append(th,i,a);L.appendChild(d);
+  });
+}
+async function load(){
+  try{files=await (await fetch("/api/files")).json();render()}
+  catch(e){say("Hindi maabot ang server. Patakbuhin muna ang: node server.js")}
+}
+async function del(f){
+  if(!confirm('I-delete ang "'+f.name+'"?'))return;
+  await fetch("/api/files?cat="+encodeURIComponent(f.cat)+"&name="+encodeURIComponent(f.name),{method:"DELETE"});
+  load();
+}
+async function up(list){
+  const cat=$("cat").value;
+  for(const file of list){
+    say("Ina-upload: "+file.name+" ...");
+    try{
+      const r=await fetch("/api/upload?cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(file.name),{method:"POST",body:file});
+      if(!r.ok)throw 0;
+    }catch(e){say("Hindi na-upload ang "+file.name);return}
+  }
+  say("");load();
+}
+$("drop").onclick=()=>$("inp").click();
+$("inp").onchange=e=>{up([...e.target.files]);e.target.value=""};
+["dragover","dragenter"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.add("on")}));
+["dragleave","drop"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.remove("on")}));
+$("drop").addEventListener("drop",e=>up([...e.dataTransfer.files]));
+$("q").oninput=render;
+render();load();
+</script>
+</body>
+</html>
