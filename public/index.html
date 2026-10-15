@@ -41,10 +41,11 @@ input[type=search]{flex:1;min-width:150px}
 </style>
 </head>
 <body>
+<div id="login" hidden style="position:fixed;inset:0;background:var(--bg);z-index:9;display:none;place-items:center;padding:20px"><div class="f" style="max-width:340px;width:100%;padding:22px;gap:12px"><b style="font-size:1.1rem">🔒 Sh7van YTA</b><span class="sub" id="lmsg">Ilagay ang password</span><input id="pw" type="password" placeholder="Password" style="background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit"><button id="go" class="tab on" style="padding:10px">Pasok</button></div></div>
 <div class="w">
 <header><div class="logo">S7</div><div><h1>Sh7van <span>YTA</span></h1><div class="sub">Resource vault para sa YouTube Automation</div></div></header>
 
-<div id="drop"><b>📁 I-drop dito ang files o pindutin para mag-upload</b><span class="sub">Kahit anong file: video, audio, ZIP, PDF, images, scripts... walang limit</span></div>
+<div id="drop"><b>📁 I-drop dito ang files o pindutin para mag-upload</b><span class="sub">Kahit anong file: video, audio, ZIP, PDF, images, scripts</span></div>
 <input id="inp" type="file" multiple hidden>
 <div id="status"></div>
 
@@ -57,15 +58,18 @@ input[type=search]{flex:1;min-width:150px}
 <div class="empty" id="empty" hidden>Wala pang files dito. Mag-upload ka na! 🚀</div>
 </div>
 
-<script>
+<script type="module">
+import {upload} from "https://esm.sh/@vercel/blob@1/client";
 const CATS=["Scripts","Thumbnails","Footage","Audio","Templates","Niche Research","Other"];
 const ICON={image:"🖼️",video:"🎬",pdf:"📄",text:"📝",audio:"🎵",zip:"🗜️",file:"📦"};
-let files=[],tab="All";
+const EXT={png:"image",jpg:"image",jpeg:"image",gif:"image",webp:"image",mp4:"video",webm:"video",mov:"video",mp3:"audio",wav:"audio",m4a:"audio",pdf:"pdf",txt:"text",md:"text",csv:"text",json:"text",zip:"zip"};
+let files=[],tab="All",pass=localStorage.getItem("sp")||"";
 const $=id=>document.getElementById(id);
 $("cat").innerHTML=CATS.map(c=>`<option>${c}</option>`).join("");
 const say=t=>{$("status").innerHTML=t?`<div class="msg"></div>`:"";if(t)$("status").firstChild.textContent=t};
 const kb=n=>n>1048576?(n/1048576).toFixed(1)+" MB":Math.max(1,Math.round(n/1024))+" KB";
-const kind=t=>t.startsWith("image")?"image":t.startsWith("video")?"video":t.startsWith("audio")?"audio":t.includes("pdf")?"pdf":t.includes("zip")?"zip":t.startsWith("text")||t.includes("json")?"text":"file";
+const kind=n=>EXT[(n.split(".").pop()||"").toLowerCase()]||"file";
+function showLogin(m){$("login").style.display="grid";$("login").hidden=false;$("lmsg").textContent=m||"Ilagay ang password"}
 function tabs(){
   $("tabs").innerHTML="";
   ["All",...CATS].forEach(c=>{const b=document.createElement("button");b.className="tab"+(c===tab?" on":"");b.textContent=c;b.onclick=()=>{tab=c;render()};$("tabs").appendChild(b)});
@@ -77,9 +81,10 @@ function render(){
   $("empty").hidden=rows.length>0;
   const L=$("list");L.innerHTML="";
   rows.forEach(f=>{
+    const k=kind(f.name);
     const d=document.createElement("div");d.className="f";
     const th=document.createElement("div");th.className="th";
-    if(kind(f.type)==="image"&&f.type!=="image/svg+xml"){const im=document.createElement("img");im.src=f.url;im.alt="";th.appendChild(im)}else th.textContent=ICON[kind(f.type)];
+    if(k==="image"){const im=document.createElement("img");im.src=f.url;im.alt="";th.appendChild(im)}else th.textContent=ICON[k];
     const i=document.createElement("div");i.className="in";
     const n=document.createElement("div");n.className="nm";n.textContent=f.name;
     const m=document.createElement("div");m.className="mt";m.textContent=f.cat+" · "+kb(f.size);
@@ -91,12 +96,19 @@ function render(){
   });
 }
 async function load(){
-  try{files=await (await fetch("/api/files")).json();render()}
-  catch(e){say("Hindi maabot ang server. Patakbuhin muna ang: node server.js")}
+  try{
+    const r=await fetch("/api/files",{headers:{"x-pass":pass}});
+    if(r.status===401){showLogin(pass?"Mali ang password":"");return}
+    const j=await r.json();
+    if(!r.ok){say(j.error||"Error sa server");return}
+    $("login").style.display="none";
+    files=j.map(b=>{const p=b.pathname.split("/");return{cat:p[0],name:p.slice(1).join("/").replace(/^[^_]*_/,""),size:b.size,url:b.url,ts:b.ts}}).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+    render();
+  }catch(e){say("Hindi maabot ang server.")}
 }
 async function del(f){
   if(!confirm('I-delete ang "'+f.name+'"?'))return;
-  await fetch("/api/files?cat="+encodeURIComponent(f.cat)+"&name="+encodeURIComponent(f.name),{method:"DELETE"});
+  await fetch("/api/files?url="+encodeURIComponent(f.url),{method:"DELETE",headers:{"x-pass":pass}});
   load();
 }
 async function up(list){
@@ -104,12 +116,13 @@ async function up(list){
   for(const file of list){
     say("Ina-upload: "+file.name+" ...");
     try{
-      const r=await fetch("/api/upload?cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(file.name),{method:"POST",body:file});
-      if(!r.ok)throw 0;
-    }catch(e){say("Hindi na-upload ang "+file.name);return}
+      await upload(cat+"/"+crypto.randomUUID().slice(0,8)+"_"+file.name,file,{access:"public",handleUploadUrl:"/api/upload",clientPayload:pass,multipart:file.size>10e6});
+    }catch(e){say("Hindi na-upload ang "+file.name+": "+(e.message||"error"));return}
   }
   say("");load();
 }
+$("go").onclick=()=>{pass=$("pw").value;localStorage.setItem("sp",pass);load()};
+$("pw").onkeydown=e=>{if(e.key==="Enter")$("go").click()};
 $("drop").onclick=()=>$("inp").click();
 $("inp").onchange=e=>{up([...e.target.files]);e.target.value=""};
 ["dragover","dragenter"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.add("on")}));
